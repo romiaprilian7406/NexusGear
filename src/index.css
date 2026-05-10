@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+@theme {
+  --color-nexus-bg: #0A0A0F;
+  --color-nexus-surface: #111118;
+  --color-nexus-border: #1E1E2E;
+  --color-nexus-cyan: #00D4FF;
+  --color-nexus-purple: #7C3AED;
+  --color-nexus-text: #E2E8F0;
+  --color-nexus-muted: #64748B;
+
+  --font-rajdhani: 'Rajdhani', sans-serif;
+  --font-inter: 'Inter', sans-serif;
+
+  --animate-gradient-x: gradient-x 15s ease infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-slide-in-right: slide-in-right 0.3s ease-out;
+
+  @keyframes gradient-x {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 5px rgba(0,212,255,0.3); }
+    50% { box-shadow: 0 0 20px rgba(0,212,255,0.6); }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slide-in-right {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #0A0A0F;
+    color: #E2E8F0;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Rajdhani', sans-serif;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    background: linear-gradient(to right, #00D4FF, #7C3AED);
+    color: white;
+    font-weight: 600;
+    padding: 0.625rem 1.5rem;
+    border-radius: 0.5rem;
+    transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+  }
+  .btn-primary:hover {
+    opacity: 0.9;
+    box-shadow: 0 0 20px rgba(0,212,255,0.3);
+  }
+  .btn-primary:active { transform: scale(0.95); }
+  .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .btn-outline {
+    border: 1px solid #1E1E2E;
+    color: #E2E8F0;
+    padding: 0.625rem 1.5rem;
+    border-radius: 0.5rem;
+    transition: all 0.3s;
+    background: transparent;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+  }
+  .btn-outline:hover {
+    border-color: #00D4FF;
+    color: #00D4FF;
+  }
+  .btn-outline:active { transform: scale(0.95); }
+
+  .card {
+    background-color: #111118;
+    border: 1px solid #1E1E2E;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    transition: all 0.3s;
+  }
+
+  .card-hover:hover {
+    border-color: #00D4FF;
+    box-shadow: 0 0 20px rgba(0,212,255,0.15);
+  }
+
+  .input-field {
+    width: 100%;
+    background-color: #0A0A0F;
+    border: 1px solid #1E1E2E;
+    border-radius: 0.5rem;
+    padding: 0.625rem 1rem;
+    color: #E2E8F0;
+    transition: all 0.2s;
+    outline: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+  }
+  .input-field::placeholder { color: #64748B; }
+  .input-field:focus {
+    border-color: #00D4FF;
+    box-shadow: 0 0 0 2px rgba(0,212,255,0.15);
+  }
+
+  .gradient-text {
+    background: linear-gradient(to right, #00D4FF, #7C3AED);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0A0A0F; }
+::-webkit-scrollbar-thumb { background: #1E1E2E; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,212,255,0.25); }
+
+/* Print styles */
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; color: black; }
+  .card { border: 1px solid #ccc; }
+}
