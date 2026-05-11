@@ -100,8 +100,9 @@ export function useAllOrders() {
         .from('orders')
         .update({ status })
         .eq('id', orderId)
+
       if (error) throw error
-      // Update lokal tanpa refetch penuh
+
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, status } : o))
       )
