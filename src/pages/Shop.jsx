@@ -22,10 +22,15 @@ const PRICE_RANGES = [
 ]
 
 export default function Shop() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') ? parseInt(searchParams.get('category')) : null)
+  const [selectedCategory, setSelectedCategory] = useState(
+    searchParams.get('category') ? parseInt(searchParams.get('category')) : null
+  )
+  const [featuredOnly, setFeaturedOnly] = useState(
+    searchParams.get('featured') === 'true'
+  )
   const [selectedPriceRange, setSelectedPriceRange] = useState(0)
   const [minRating, setMinRating] = useState(0)
   const [sort, setSort] = useState('newest')
@@ -49,6 +54,7 @@ export default function Shop() {
     minPrice: priceRange.min || undefined,
     maxPrice: priceRange.max === Infinity ? undefined : priceRange.max,
     minRating: minRating || undefined,
+    featured: featuredOnly === true ? true : undefined,
     sort,
   }
 
@@ -63,10 +69,11 @@ export default function Shop() {
     setSelectedPriceRange(0)
     setMinRating(0)
     setSort('newest')
+    setFeaturedOnly(false)
     setPage(1)
   }
 
-  const hasActiveFilters = selectedCategory || selectedPriceRange > 0 || minRating > 0 || search
+  const hasActiveFilters = selectedCategory || selectedPriceRange > 0 || minRating > 0 || search || featuredOnly
 
   return (
     <div className="pt-20 min-h-screen">
@@ -75,9 +82,15 @@ export default function Shop() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="font-rajdhani text-4xl font-bold text-nexus-text">
-              <span className="gradient-text">SHOP</span>
+              {featuredOnly
+                ? <><span className="gradient-text">FEATURED</span> PRODUCTS</>
+                : <span className="gradient-text">SHOP</span>
+              }
             </h1>
-            <p className="text-nexus-muted">{products.length} produk ditemukan</p>
+            <p className="text-nexus-muted">
+              {products.length} produk ditemukan
+              {featuredOnly && ' · Featured only'}
+            </p>
           </div>
 
           {/* Search + Sort */}
@@ -157,7 +170,7 @@ export default function Shop() {
                 </div>
               </div>
 
-              {/* Rating */}
+              {/* Rating + Featured + Reset */}
               <div>
                 <h3 className="font-semibold text-nexus-text mb-3 text-sm uppercase tracking-wider">Rating Minimum</h3>
                 <div className="space-y-2">
@@ -170,6 +183,17 @@ export default function Shop() {
                       {r === 0 ? 'Semua Rating' : `★ ${r}+`}
                     </button>
                   ))}
+                </div>
+
+                {/* Featured toggle */}
+                <div className="mt-4">
+                  <h3 className="font-semibold text-nexus-text mb-3 text-sm uppercase tracking-wider">Tipe Produk</h3>
+                  <button
+                    onClick={() => { setFeaturedOnly(!featuredOnly); setPage(1) }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${featuredOnly ? 'bg-nexus-cyan/10 text-nexus-cyan border border-nexus-cyan/30' : 'text-nexus-muted hover:text-nexus-text hover:bg-nexus-border/30'}`}
+                  >
+                    ⚡ Featured Only
+                  </button>
                 </div>
 
                 {hasActiveFilters && (
@@ -188,6 +212,12 @@ export default function Shop() {
         {/* Active filter tags */}
         {hasActiveFilters && (
           <div className="flex flex-wrap gap-2 mb-6">
+            {featuredOnly && (
+              <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-nexus-cyan/10 border border-nexus-cyan/30 text-nexus-cyan text-sm">
+                ⚡ Featured
+                <button onClick={() => setFeaturedOnly(false)}><X className="w-3 h-3" /></button>
+              </span>
+            )}
             {selectedCategory && categories.find((c) => c.id === selectedCategory) && (
               <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-nexus-cyan/10 border border-nexus-cyan/30 text-nexus-cyan text-sm">
                 {categories.find((c) => c.id === selectedCategory)?.name}
