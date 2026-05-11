@@ -31,11 +31,30 @@ export default function AdminOrders() {
 
   const filtered = orders.filter((o) => {
     const matchStatus = filter === 'all' || o.status === filter
-    const name = o.profiles?.full_name || ''
-    const matchSearch = !search ||
-      name.toLowerCase().includes(search.toLowerCase()) ||
-      o.id.toLowerCase().includes(search.toLowerCase())
-    return matchStatus && matchSearch
+
+    if (!search) return matchStatus
+
+    const searchLower = search.toLowerCase().trim()
+    const customerName = o.profiles?.full_name?.toLowerCase() || ''
+
+    // Cari berdasarkan nama customer
+    const matchName = customerName.includes(searchLower)
+
+    // Cari berdasarkan order ID — support beberapa format:
+    // 1. UUID penuh: 550e8400-e29b-41d4-a716-446655440000
+    // 2. 6 karakter pertama: 550e84
+    // 3. Format display NXG-550E84
+    const fullId = o.id.toLowerCase()
+    const shortId = o.id.slice(0, 6).toLowerCase()
+    const displayId = `nxg-${shortId}`
+    const searchClean = searchLower.replace('nxg-', '') // hapus prefix jika user ketik NXG-
+
+    const matchId =
+      fullId.includes(searchLower) ||           // UUID penuh
+      shortId.includes(searchClean) ||           // 6 karakter pertama
+      displayId.includes(searchLower)            // format NXG-xxxxxx
+
+    return matchStatus && (matchName || matchId)
   })
 
   const handleUpdateStatus = async (orderId, newStatus) => {
@@ -95,7 +114,7 @@ export default function AdminOrders() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari nama / order ID..."
+              placeholder="Cari nama customer / order ID..."
               className="input-field pl-10 w-64"
             />
           </div>
