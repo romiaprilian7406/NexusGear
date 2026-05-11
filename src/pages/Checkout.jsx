@@ -3,16 +3,16 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { CheckCircle2, MapPin, CreditCard, ClipboardList, ChevronRight, Loader2 } from 'lucide-react'
+import { CheckCircle2, MapPin, CreditCard, ClipboardList, ChevronRight, Loader2, AlertCircle } from 'lucide-react'
 import useCartStore from '../stores/cartStore'
 import useAuthStore from '../stores/authStore'
 import { formatCurrency, calculateShipping } from '../lib/utils'
-import { supabase } from '../lib/supabase'
+import { useCreateOrder } from '../hooks/useOrders'
 import toast from 'react-hot-toast'
 
 const addressSchema = z.object({
   recipient_name: z.string().min(2, 'Nama minimal 2 karakter'),
-  phone: z.string().min(10, 'Nomor HP tidak valid').max(15),
+  phone: z.string().min(10, 'Nomor HP tidak valid').max(15, 'Nomor HP terlalu panjang'),
   province: z.string().min(2, 'Pilih provinsi'),
   city: z.string().min(2, 'Masukkan kota'),
   district: z.string().min(2, 'Masukkan kecamatan'),
@@ -45,22 +45,26 @@ export default function Checkout() {
   const [step, setStep] = useState(1)
   const [paymentMethod, setPaymentMethod] = useState('')
   const [shippingAddress, setShippingAddress] = useState(null)
-  const [submitting, setSubmitting] = useState(false)
   const { items, clearCart } = useCartStore()
   const { user, profile } = useAuthStore()
   const navigate = useNavigate()
+  const { createOrder, submitting } = useCreateOrder()
 
-  const { register, handleSubmit, formState: { errors }, getValues } = useForm({
+  const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(addressSchema),
     defaultValues: {
       recipient_name: profile?.full_name || '',
       phone: profile?.phone || '',
-    }
+    },
   })
 
   const subtotal = items.reduce((s, i) => s + i.product.price * i.quantity, 0)
   const shipping = calculateShipping(subtotal)
   const total = subtotal + shipping
+
+  // Cek stok semua item
+  const outOfStockItems = items.filter((i) => i.product.stock === 0)
+  const hasOutOfStock = outOfStockItems.length > 0
 
   const onAddressSubmit = (data) => {
     setShippingAddress(data)
@@ -68,48 +72,59 @@ export default function Checkout() {
   }
 
   const onPaymentNext = () => {
-    if (!paymentMethod) { toast.error('Pilih metode pembayaran'); return }
+    if (!paymentMethod) {
+      toast.error('Pilih metode pembayaran terlebih dahulu')
+      return
+    }
     setStep(3)
   }
 
   const onConfirm = async () => {
-    setSubmitting(true)
-    try {
-      const orderData = {
-        user_id: user.id,
-        status: 'pending',
+    if (hasOutOfStock) {
+      toast.error('Beberapa item sudah habis stok. Hapus dari keranjang.')
+      return
+    }
+
+    const result = await createOrder({
+      userId: user.id,
+      orderData: {
         total_amount: total,
         shipping_address: shippingAddress,
         payment_method: paymentMethod,
-      }
+      },
+      items,
+    })
 
-      // Try Supabase, fallback to mock
-      let orderId
-      try {
-        const { data: order, error } = await supabase.from('orders').insert(orderData).select().single()
-        if (error) throw error
-        await supabase.from('order_items').insert(
-          items.map((i) => ({
-            order_id: order.id,
-            product_id: i.product.id,
-            quantity: i.quantity,
-            price_at_purchase: i.product.price,
-          }))
-        )
-        orderId = order.id
-      } catch {
-        // Mock mode: generate fake order ID
-        orderId = `mock-${Date.now()}`
-      }
-
+    if (result.success) {
       clearCart()
-      navigate(`/receipt/${orderId}`, { state: { order: { ...orderData, id: orderId, items } } })
+      navigate(`/receipt/${result.orderId}`, {
+        state: {
+          order: {
+            ...result.order,
+            shipping_address: shippingAddress,
+            payment_method: paymentMethod,
+            items,
+          },
+        },
+      })
       toast.success('Pesanan berhasil dibuat!')
-    } catch (err) {
-      toast.error('Gagal membuat pesanan. Coba lagi.')
-    } finally {
-      setSubmitting(false)
+    } else {
+      toast.error('Gagal membuat pesanan: ' + result.error)
     }
+  }
+
+  // Jika keranjang kosong setelah render
+  if (items.length === 0) {
+    return (
+      <div className="pt-20 min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="font-rajdhani text-3xl text-nexus-muted mb-4">Keranjang kosong</p>
+          <button onClick={() => navigate('/shop')} className="btn-primary">
+            Kembali Belanja
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -119,13 +134,34 @@ export default function Checkout() {
           <span className="gradient-text">CHECKOUT</span>
         </h1>
 
+        {/* Out of stock warning */}
+        {hasOutOfStock && (
+          <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-red-400 font-semibold text-sm">Stok habis!</p>
+              <p className="text-red-400/80 text-xs mt-1">
+                {outOfStockItems.map((i) => i.product.name).join(', ')} tidak tersedia.
+                Hapus item ini sebelum checkout.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Step Indicator */}
         <div className="flex items-center mb-10">
           {STEPS.map((s, i) => (
             <div key={s.id} className="flex items-center flex-1">
               <div className={`flex items-center gap-2 ${step >= s.id ? 'text-nexus-cyan' : 'text-nexus-muted'}`}>
-                <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${step >= s.id ? 'border-nexus-cyan bg-nexus-cyan/10 shadow-[0_0_10px_rgba(0,212,255,0.3)]' : 'border-nexus-border'}`}>
-                  {step > s.id ? <CheckCircle2 className="w-5 h-5" /> : <s.icon className="w-5 h-5" />}
+                <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
+                  step >= s.id
+                    ? 'border-nexus-cyan bg-nexus-cyan/10 shadow-[0_0_10px_rgba(0,212,255,0.3)]'
+                    : 'border-nexus-border'
+                }`}>
+                  {step > s.id
+                    ? <CheckCircle2 className="w-5 h-5" />
+                    : <s.icon className="w-5 h-5" />
+                  }
                 </div>
                 <span className="hidden sm:block font-semibold text-sm">{s.label}</span>
               </div>
@@ -180,10 +216,18 @@ export default function Checkout() {
                 </div>
                 <div>
                   <label className="block text-sm text-nexus-muted mb-1.5">Alamat Lengkap *</label>
-                  <textarea {...register('address')} className="input-field h-24 resize-none" placeholder="Jalan, nomor rumah, RT/RW, nama gedung, lantai, dll." />
+                  <textarea
+                    {...register('address')}
+                    className="input-field h-24 resize-none"
+                    placeholder="Jalan, nomor rumah, RT/RW, nama gedung, lantai, dll."
+                  />
                   {errors.address && <p className="text-red-400 text-xs mt-1">{errors.address.message}</p>}
                 </div>
-                <button type="submit" className="btn-primary w-full flex items-center justify-center gap-2 py-3.5">
+                <button
+                  type="submit"
+                  disabled={hasOutOfStock}
+                  className="btn-primary w-full flex items-center justify-center gap-2 py-3.5 disabled:opacity-50"
+                >
                   Lanjut ke Pembayaran <ChevronRight className="w-5 h-5" />
                 </button>
               </form>
@@ -198,14 +242,20 @@ export default function Checkout() {
                     <button
                       key={m.id}
                       onClick={() => setPaymentMethod(m.id)}
-                      className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${paymentMethod === m.id ? 'border-nexus-cyan bg-nexus-cyan/5 shadow-[0_0_15px_rgba(0,212,255,0.1)]' : 'border-nexus-border hover:border-nexus-cyan/50'}`}
+                      className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                        paymentMethod === m.id
+                          ? 'border-nexus-cyan bg-nexus-cyan/5 shadow-[0_0_15px_rgba(0,212,255,0.1)]'
+                          : 'border-nexus-border hover:border-nexus-cyan/50'
+                      }`}
                     >
                       <span className="text-2xl">{m.icon}</span>
                       <div className="flex-1">
                         <p className="font-semibold text-nexus-text">{m.label}</p>
                         <p className="text-nexus-muted text-sm">{m.desc}</p>
                       </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === m.id ? 'border-nexus-cyan' : 'border-nexus-border'}`}>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                        paymentMethod === m.id ? 'border-nexus-cyan' : 'border-nexus-border'
+                      }`}>
                         {paymentMethod === m.id && <div className="w-2.5 h-2.5 rounded-full bg-nexus-cyan" />}
                       </div>
                     </button>
@@ -233,9 +283,14 @@ export default function Checkout() {
                   </div>
                   {shippingAddress && (
                     <div className="text-nexus-muted text-sm space-y-1">
-                      <p className="font-medium text-nexus-text">{shippingAddress.recipient_name} — {shippingAddress.phone}</p>
+                      <p className="font-medium text-nexus-text">
+                        {shippingAddress.recipient_name} — {shippingAddress.phone}
+                      </p>
                       <p>{shippingAddress.address}</p>
-                      <p>{shippingAddress.district}, {shippingAddress.city}, {shippingAddress.province} {shippingAddress.postal_code}</p>
+                      <p>
+                        {shippingAddress.district}, {shippingAddress.city},
+                        {shippingAddress.province} {shippingAddress.postal_code}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -246,19 +301,27 @@ export default function Checkout() {
                     <CreditCard className="w-4 h-4 text-nexus-cyan" />
                     <span className="font-semibold text-nexus-text text-sm">Metode Pembayaran</span>
                   </div>
-                  <p className="text-nexus-text text-sm">{PAYMENT_METHODS.find((m) => m.id === paymentMethod)?.label}</p>
+                  <p className="text-nexus-text text-sm">
+                    {PAYMENT_METHODS.find((m) => m.id === paymentMethod)?.label}
+                  </p>
                 </div>
 
                 {/* Items */}
                 <div className="mb-4 p-4 rounded-xl bg-nexus-bg border border-nexus-border space-y-3">
                   {items.map((item) => (
                     <div key={item.product.id} className="flex items-center gap-3">
-                      <img src={item.product.image_url} alt={item.product.name} className="w-12 h-12 rounded-lg object-cover" />
+                      <img
+                        src={item.product.image_url}
+                        alt={item.product.name}
+                        className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                      />
                       <div className="flex-1 min-w-0">
                         <p className="text-nexus-text text-sm font-medium truncate">{item.product.name}</p>
                         <p className="text-nexus-muted text-xs">× {item.quantity}</p>
                       </div>
-                      <p className="text-nexus-cyan text-sm font-bold">{formatCurrency(item.product.price * item.quantity)}</p>
+                      <p className="text-nexus-cyan text-sm font-bold flex-shrink-0">
+                        {formatCurrency(item.product.price * item.quantity)}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -267,10 +330,13 @@ export default function Checkout() {
                   <button onClick={() => setStep(2)} className="btn-outline flex-1 py-3">Kembali</button>
                   <button
                     onClick={onConfirm}
-                    disabled={submitting}
-                    className="btn-primary flex-1 py-3 flex items-center justify-center gap-2"
+                    disabled={submitting || hasOutOfStock}
+                    className="btn-primary flex-1 py-3 flex items-center justify-center gap-2 disabled:opacity-60"
                   >
-                    {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Memproses...</> : <>Konfirmasi Pesanan <CheckCircle2 className="w-5 h-5" /></>}
+                    {submitting
+                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Memproses...</>
+                      : <><CheckCircle2 className="w-5 h-5" /> Konfirmasi Pesanan</>
+                    }
                   </button>
                 </div>
               </div>
@@ -281,15 +347,24 @@ export default function Checkout() {
           <div>
             <div className="card sticky top-24">
               <h3 className="font-rajdhani text-lg font-bold text-nexus-text mb-4">RINGKASAN</h3>
-              <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
+              <div className="space-y-3 mb-4 max-h-64 overflow-y-auto scrollbar-hide">
                 {items.map((item) => (
                   <div key={item.product.id} className="flex gap-3 text-sm">
-                    <img src={item.product.image_url} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                    <img
+                      src={item.product.image_url}
+                      alt=""
+                      className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-nexus-text truncate">{item.product.name}</p>
                       <p className="text-nexus-muted">×{item.quantity}</p>
+                      {item.product.stock === 0 && (
+                        <p className="text-red-400 text-xs">Stok habis!</p>
+                      )}
                     </div>
-                    <p className="text-nexus-text font-medium">{formatCurrency(item.product.price * item.quantity)}</p>
+                    <p className="text-nexus-text font-medium flex-shrink-0">
+                      {formatCurrency(item.product.price * item.quantity)}
+                    </p>
                   </div>
                 ))}
               </div>

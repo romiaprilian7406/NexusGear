@@ -7,6 +7,7 @@ const useAuthStore = create(
     (set, get) => ({
       user: null,
       profile: null,
+      loading: false,
 
       get isAdmin() {
         return get().profile?.role === 'admin'
@@ -14,21 +15,30 @@ const useAuthStore = create(
 
       setUser: (user) => set({ user }),
       setProfile: (profile) => set({ profile }),
+      setLoading: (loading) => set({ loading }),
 
       logout: async () => {
-        try { await supabase.auth.signOut() } catch {}
-        set({ user: null, profile: null })
+        set({ loading: true })
+        try {
+          await supabase.auth.signOut()
+        } catch {}
+        set({ user: null, profile: null, loading: false })
       },
 
       fetchProfile: async (userId) => {
+        if (!userId) return
         try {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', userId)
             .single()
+          if (error) throw error
           if (data) set({ profile: data })
-        } catch {}
+        } catch (err) {
+          // Profile not found — could be new user, ignore silently
+          console.warn('fetchProfile:', err?.message)
+        }
       },
     }),
     {

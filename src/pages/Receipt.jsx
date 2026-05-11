@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { useParams, useLocation, Link } from 'react-router-dom'
-import { Zap, Printer, Package, CheckCircle2 } from 'lucide-react'
-import { formatCurrency, formatDateTime, calculateShipping } from '../lib/utils'
+import { Zap, Printer, Package, CheckCircle2, Loader2 } from 'lucide-react'
+import { formatCurrency, formatDateTime, calculateShipping, STATUS_COLORS, STATUS_LABELS } from '../lib/utils'
+import { supabase } from '../lib/supabase'
 import useAuthStore from '../stores/authStore'
 
 const PAYMENT_LABELS = {
@@ -16,9 +18,69 @@ export default function Receipt() {
   const { orderId } = useParams()
   const { state } = useLocation()
   const { profile } = useAuthStore()
-  const order = state?.order
+
+  const [order, setOrder] = useState(state?.order || null)
+  const [loading, setLoading] = useState(!state?.order)
+
+  // Jika tidak ada state (misalnya user refresh atau buka langsung link), fetch dari Supabase
+  useEffect(() => {
+    if (state?.order) return
+    if (!orderId || orderId.startsWith('mock-')) {
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    supabase
+      .from('orders')
+      .select(`
+        *,
+        order_items (
+          id,
+          quantity,
+          price_at_purchase,
+          products (
+            id,
+            name,
+            image_url,
+            price
+          )
+        )
+      `)
+      .eq('id', orderId)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data) {
+          // Normalize format agar konsisten dengan state
+          setOrder({
+            ...data,
+            items: data.order_items?.map((oi) => ({
+              product: {
+                id: oi.products?.id,
+                name: oi.products?.name,
+                image_url: oi.products?.image_url,
+                price: oi.price_at_purchase,
+              },
+              quantity: oi.quantity,
+            })) || [],
+          })
+        }
+        setLoading(false)
+      })
+  }, [orderId, state])
 
   const handlePrint = () => window.print()
+
+  if (loading) {
+    return (
+      <div className="pt-20 min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 animate-spin text-nexus-cyan mx-auto mb-4" />
+          <p className="text-nexus-muted">Memuat detail pesanan...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!order) {
     return (
@@ -31,13 +93,15 @@ export default function Receipt() {
     )
   }
 
-  const subtotal = order.items?.reduce((s, i) => s + i.product.price * i.quantity, 0) || order.total_amount
+  // Hitung subtotal dari items
+  const items = order.items || []
+  const subtotal = items.reduce((s, i) => s + (i.product?.price || 0) * i.quantity, 0) || order.total_amount
   const shipping = calculateShipping(subtotal)
-  const total = order.total_amount
+  const total = order.total_amount || subtotal + shipping
 
-  const displayOrderId = orderId.startsWith('mock-')
+  const displayOrderId = orderId?.startsWith('mock-')
     ? `NXG-${orderId.slice(-6).toUpperCase()}`
-    : `NXG-${orderId.slice(0, 6).toUpperCase()}`
+    : `NXG-${(orderId || '').slice(0, 6).toUpperCase()}`
 
   return (
     <div className="pt-20 min-h-screen">
@@ -67,12 +131,12 @@ export default function Receipt() {
             <div className="text-right">
               <p className="text-nexus-muted text-xs">No. Invoice</p>
               <p className="font-rajdhani text-lg font-bold text-nexus-cyan">{displayOrderId}</p>
-              <p className="text-nexus-muted text-xs">{formatDateTime(new Date())}</p>
+              <p className="text-nexus-muted text-xs">{formatDateTime(order.created_at || new Date())}</p>
             </div>
           </div>
 
           {/* Customer & Shipping */}
-          <div className="grid grid-cols-2 gap-6 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
             <div>
               <p className="text-nexus-muted text-xs uppercase tracking-wider mb-2">Pembeli</p>
               <p className="font-semibold text-nexus-text">{profile?.full_name || 'Customer'}</p>
@@ -83,32 +147,42 @@ export default function Receipt() {
                 <p className="font-semibold text-nexus-text">{order.shipping_address.recipient_name}</p>
                 <p className="text-nexus-muted text-sm">{order.shipping_address.phone}</p>
                 <p className="text-nexus-muted text-sm">{order.shipping_address.address}</p>
-                <p className="text-nexus-muted text-sm">{order.shipping_address.city}, {order.shipping_address.province}</p>
+                <p className="text-nexus-muted text-sm">
+                  {order.shipping_address.city}, {order.shipping_address.province}
+                </p>
               </div>
             )}
           </div>
 
           {/* Items */}
-          <div className="mb-6">
-            <p className="text-nexus-muted text-xs uppercase tracking-wider mb-3">Item Pesanan</p>
-            <div className="space-y-3 bg-nexus-bg rounded-xl p-4 border border-nexus-border">
-              <div className="grid grid-cols-4 text-xs text-nexus-muted uppercase tracking-wider pb-2 border-b border-nexus-border">
-                <span className="col-span-2">Produk</span>
-                <span className="text-center">Qty</span>
-                <span className="text-right">Harga</span>
-              </div>
-              {order.items?.map((item) => (
-                <div key={item.product.id} className="grid grid-cols-4 text-sm items-center">
-                  <div className="col-span-2 flex items-center gap-2">
-                    <img src={item.product.image_url} alt="" className="w-8 h-8 rounded object-cover" />
-                    <span className="text-nexus-text truncate">{item.product.name}</span>
-                  </div>
-                  <span className="text-center text-nexus-muted">×{item.quantity}</span>
-                  <span className="text-right text-nexus-text font-medium">{formatCurrency(item.product.price * item.quantity)}</span>
+          {items.length > 0 && (
+            <div className="mb-6">
+              <p className="text-nexus-muted text-xs uppercase tracking-wider mb-3">Item Pesanan</p>
+              <div className="space-y-3 bg-nexus-bg rounded-xl p-4 border border-nexus-border">
+                <div className="grid grid-cols-4 text-xs text-nexus-muted uppercase tracking-wider pb-2 border-b border-nexus-border">
+                  <span className="col-span-2">Produk</span>
+                  <span className="text-center">Qty</span>
+                  <span className="text-right">Harga</span>
                 </div>
-              ))}
+                {items.map((item, idx) => (
+                  <div key={idx} className="grid grid-cols-4 text-sm items-center">
+                    <div className="col-span-2 flex items-center gap-2">
+                      <img
+                        src={item.product?.image_url}
+                        alt=""
+                        className="w-8 h-8 rounded object-cover flex-shrink-0"
+                      />
+                      <span className="text-nexus-text truncate">{item.product?.name}</span>
+                    </div>
+                    <span className="text-center text-nexus-muted">×{item.quantity}</span>
+                    <span className="text-right text-nexus-text font-medium">
+                      {formatCurrency((item.product?.price || 0) * item.quantity)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Totals */}
           <div className="space-y-2 text-sm mb-6 pb-6 border-b border-nexus-border">
@@ -132,10 +206,15 @@ export default function Receipt() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-nexus-muted text-xs uppercase tracking-wider mb-1">Metode Bayar</p>
-              <p className="text-nexus-text font-medium">{PAYMENT_LABELS[order.payment_method] || order.payment_method}</p>
+              <p className="text-nexus-text font-medium">
+                {PAYMENT_LABELS[order.payment_method] || order.payment_method || '-'}
+              </p>
             </div>
-            <div className="px-4 py-2 rounded-xl border border-yellow-400/30 bg-yellow-400/10">
-              <p className="text-yellow-400 font-semibold text-sm">⏳ Menunggu Pembayaran</p>
+            <div className={`px-4 py-2 rounded-xl border ${STATUS_COLORS[order.status || 'pending']}`}>
+              <p className="font-semibold text-sm">
+                {order.status === 'pending' ? '⏳ ' : ''}
+                {STATUS_LABELS[order.status || 'pending']}
+              </p>
             </div>
           </div>
         </div>

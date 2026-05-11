@@ -13,6 +13,11 @@ const schema = z.object({
   password: z.string().min(6, 'Password minimal 6 karakter'),
 })
 
+const isDemoMode = () => {
+  const url = import.meta.env.VITE_SUPABASE_URL || ''
+  return !url || url.includes('placeholder') || url === 'your_supabase_project_url'
+}
+
 export default function Login() {
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -20,38 +25,56 @@ export default function Login() {
   const location = useLocation()
   const { setUser, setProfile, fetchProfile } = useAuthStore()
 
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const { register, handleSubmit, formState: { errors }, setError } = useForm({
     resolver: zodResolver(schema),
   })
 
   const onSubmit = async ({ email, password }) => {
     setLoading(true)
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
-
-      setUser(data.user)
-      await fetchProfile(data.user.id)
-      const profile = useAuthStore.getState().profile
-      toast.success('Login berhasil!')
-
-      const from = location.state?.from?.pathname || '/'
-      if (profile?.role === 'admin') navigate('/admin/dashboard')
-      else navigate(from)
-    } catch (err) {
-      // Demo mode: simulate login
-      if (err.message?.includes('fetch') || err.message?.includes('network') || err.message?.includes('placeholder')) {
-        const mockUser = { id: 'demo-user', email }
-        const mockProfile = email.includes('admin')
-          ? { id: 'demo-user', full_name: 'Admin NexusGear', role: 'admin', email }
-          : { id: 'demo-user', full_name: 'Demo User', role: 'user', email }
+      if (isDemoMode()) {
+        // Demo mode
+        const mockUser = { id: `demo-${Date.now()}`, email }
+        const mockProfile = email.toLowerCase().includes('admin')
+          ? { id: mockUser.id, full_name: 'Admin NexusGear', role: 'admin', email }
+          : { id: mockUser.id, full_name: email.split('@')[0], role: 'user', email }
         setUser(mockUser)
         setProfile(mockProfile)
         toast.success('Login berhasil! (Mode Demo)')
         if (mockProfile.role === 'admin') navigate('/admin/dashboard')
         else navigate(location.state?.from?.pathname || '/')
+        return
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) {
+        // Handle error spesifik
+        if (error.message.includes('Invalid login credentials')) {
+          setError('email', { message: '' })
+          setError('password', { message: 'Email atau password salah' })
+        } else if (error.message.includes('Email not confirmed')) {
+          toast.error('Email belum dikonfirmasi. Cek inbox kamu.')
+        } else {
+          toast.error(error.message)
+        }
+        return
+      }
+
+      setUser(data.user)
+      await fetchProfile(data.user.id)
+
+      toast.success('Login berhasil!')
+
+      const currentProfile = useAuthStore.getState().profile
+      const from = location.state?.from?.pathname || '/'
+      if (currentProfile?.role === 'admin') navigate('/admin/dashboard')
+      else navigate(from)
+    } catch (err) {
+      // Network error
+      if (err?.message?.includes('fetch') || err?.message?.includes('network')) {
+        toast.error('Tidak bisa terhubung ke server. Cek koneksi internet.')
       } else {
-        toast.error(err.message || 'Login gagal')
+        toast.error('Terjadi kesalahan. Coba lagi.')
       }
     } finally {
       setLoading(false)
@@ -79,9 +102,17 @@ export default function Login() {
               <label className="block text-sm text-nexus-muted mb-1.5">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-nexus-muted" />
-                <input {...register('email')} type="email" className="input-field pl-10" placeholder="gamer@email.com" />
+                <input
+                  {...register('email')}
+                  type="email"
+                  className="input-field pl-10"
+                  placeholder="gamer@email.com"
+                  autoComplete="email"
+                />
               </div>
-              {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
+              {errors.email && errors.email.message && (
+                <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>
+              )}
             </div>
 
             <div>
@@ -93,6 +124,7 @@ export default function Login() {
                   type={showPass ? 'text' : 'password'}
                   className="input-field pl-10 pr-10"
                   placeholder="••••••••"
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
@@ -102,15 +134,30 @@ export default function Login() {
                   {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>}
+              {errors.password && (
+                <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>
+              )}
             </div>
 
             <div className="flex justify-end">
-              <a href="#" className="text-nexus-cyan text-sm hover:underline">Lupa Password?</a>
+              <button
+                type="button"
+                onClick={() => toast('Fitur reset password segera hadir!', { icon: '🔐' })}
+                className="text-nexus-cyan text-sm hover:underline"
+              >
+                Lupa Password?
+              </button>
             </div>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full py-3.5 flex items-center justify-center gap-2 text-base">
-              {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Masuk...</> : 'Masuk'}
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary w-full py-3.5 flex items-center justify-center gap-2 text-base"
+            >
+              {loading
+                ? <><Loader2 className="w-5 h-5 animate-spin" /> Masuk...</>
+                : 'Masuk'
+              }
             </button>
           </form>
 
@@ -122,17 +169,21 @@ export default function Login() {
             </div>
             <p className="text-nexus-muted text-sm">
               Belum punya akun?{' '}
-              <Link to="/register" className="text-nexus-cyan hover:underline font-medium">Daftar Sekarang</Link>
+              <Link to="/register" className="text-nexus-cyan hover:underline font-medium">
+                Daftar Sekarang
+              </Link>
             </p>
           </div>
         </div>
 
-        {/* Demo hint */}
-        <div className="mt-4 p-3 rounded-xl bg-nexus-surface border border-nexus-border text-center">
-          <p className="text-nexus-muted text-xs">
-            💡 Demo: gunakan email berisi "admin" untuk login sebagai admin
-          </p>
-        </div>
+        {/* Demo mode hint */}
+        {isDemoMode() && (
+          <div className="mt-4 p-3 rounded-xl bg-nexus-surface border border-nexus-border text-center">
+            <p className="text-nexus-muted text-xs">
+              💡 <strong className="text-nexus-text">Mode Demo:</strong> gunakan email apapun berisi "admin" untuk login sebagai admin, atau email lainnya sebagai user biasa
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )

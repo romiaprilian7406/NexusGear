@@ -1,6 +1,6 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Package, ChevronRight } from 'lucide-react'
+import { useState } from 'react'
+import { Package, ChevronRight, RefreshCw } from 'lucide-react'
 import { useOrders } from '../hooks/useOrders'
 import { formatCurrency, formatDate, STATUS_LABELS, STATUS_COLORS } from '../lib/utils'
 import { Loading } from '../components/shared/Loading'
@@ -9,7 +9,7 @@ import { EmptyState } from '../components/shared/EmptyState'
 const ALL_STATUSES = ['all', 'pending', 'processing', 'shipped', 'completed', 'cancelled']
 
 export default function OrderHistory() {
-  const { orders, loading } = useOrders()
+  const { orders, loading, error } = useOrders()
   const [statusFilter, setStatusFilter] = useState('all')
 
   const filtered = statusFilter === 'all'
@@ -31,7 +31,16 @@ export default function OrderHistory() {
           <h1 className="font-rajdhani text-4xl font-bold text-nexus-text">
             RIWAYAT <span className="gradient-text">PESANAN</span>
           </h1>
+          <span className="text-nexus-muted text-sm">{orders.length} pesanan</span>
         </div>
+
+        {/* Error state */}
+        {error && (
+          <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 flex-shrink-0" />
+            Gagal memuat pesanan: {error}
+          </div>
+        )}
 
         {/* Status Filter */}
         <div className="flex gap-2 flex-wrap mb-6">
@@ -50,25 +59,29 @@ export default function OrderHistory() {
           ))}
         </div>
 
+        {/* Empty state */}
         {filtered.length === 0 ? (
           <EmptyState
             icon={<Package className="w-16 h-16 text-nexus-border" />}
-            title="Belum ada pesanan"
+            title={orders.length === 0 ? 'Belum ada pesanan' : 'Tidak ada pesanan dengan status ini'}
             description={
-              statusFilter === 'all'
+              orders.length === 0
                 ? 'Mulai belanja dan temukan gaming gear impianmu!'
-                : `Tidak ada pesanan dengan status "${STATUS_LABELS[statusFilter]}"`
+                : 'Coba pilih filter status lain.'
             }
             action={
-              statusFilter === 'all'
-                ? <Link to="/shop" className="btn-primary">Mulai Belanja</Link>
-                : <button onClick={() => setStatusFilter('all')} className="btn-outline">Lihat Semua Pesanan</button>
+              orders.length === 0 && (
+                <Link to="/shop" className="btn-primary">
+                  Mulai Belanja
+                </Link>
+              )
             }
           />
         ) : (
           <div className="space-y-4">
             {filtered.map((order) => (
               <div key={order.id} className="card card-hover">
+                {/* Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <p className="text-nexus-muted text-xs mb-1">No. Pesanan</p>
@@ -82,19 +95,27 @@ export default function OrderHistory() {
                   </span>
                 </div>
 
-                {/* Items preview */}
-                <div className="flex gap-2 mb-4 overflow-x-auto scrollbar-hide">
-                  {order.order_items?.map((item) => (
-                    <img
-                      key={item.id}
-                      src={item.products?.image_url || 'https://placehold.co/60x60/111118/00D4FF?text=?'}
-                      alt={item.products?.name}
-                      title={`${item.products?.name} ×${item.quantity}`}
-                      className="w-14 h-14 rounded-lg object-cover flex-shrink-0 border border-nexus-border"
-                    />
-                  ))}
-                </div>
+                {/* Product thumbnails */}
+                {order.order_items && order.order_items.length > 0 && (
+                  <div className="flex gap-2 mb-4 overflow-x-auto scrollbar-hide">
+                    {order.order_items.map((item) => (
+                      <div key={item.id} className="flex-shrink-0 relative" title={`${item.products?.name} ×${item.quantity}`}>
+                        <img
+                          src={item.products?.image_url || 'https://placehold.co/60x60/111118/00D4FF?text=?'}
+                          alt={item.products?.name}
+                          className="w-14 h-14 rounded-lg object-cover border border-nexus-border"
+                        />
+                        {item.quantity > 1 && (
+                          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-nexus-cyan text-nexus-bg text-xs font-bold flex items-center justify-center">
+                            {item.quantity}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
+                {/* Footer */}
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-nexus-muted text-xs">Total Pembayaran</p>
@@ -104,10 +125,7 @@ export default function OrderHistory() {
                   </div>
                   <Link
                     to={`/receipt/${order.id}`}
-                    state={{ order: { ...order, items: order.order_items?.map((item) => ({
-                      product: item.products,
-                      quantity: item.quantity,
-                    })) }}}
+                    state={{ order }}
                     className="flex items-center gap-1 text-nexus-cyan text-sm hover:underline"
                   >
                     Lihat Detail <ChevronRight className="w-4 h-4" />
