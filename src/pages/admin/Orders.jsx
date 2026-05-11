@@ -269,31 +269,48 @@ export default function AdminOrders() {
               </div>
 
               {/* Items */}
-              {detailOrder.order_items && detailOrder.order_items.length > 0 && (
-                <div className="p-4 rounded-xl bg-nexus-bg border border-nexus-border space-y-3">
-                  <p className="text-xs text-nexus-muted uppercase tracking-wider">Item Pesanan</p>
-                  {detailOrder.order_items.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3">
-                      <img
-                        src={item.products?.image_url || 'https://placehold.co/40x40/111118/00D4FF?text=?'}
-                        alt={item.products?.name}
-                        className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-nexus-text text-sm truncate">
-                          {item.products?.name || 'Produk dihapus'}
-                        </p>
-                        <p className="text-nexus-muted text-xs">
-                          ×{item.quantity} × {formatCurrency(item.price_at_purchase)}
+              <div className="p-4 rounded-xl bg-nexus-bg border border-nexus-border">
+                <p className="text-xs text-nexus-muted uppercase tracking-wider mb-3">
+                  Item Pesanan ({detailOrder.order_items?.length || 0} produk)
+                </p>
+
+                {!detailOrder.order_items || detailOrder.order_items.length === 0 ? (
+                  <p className="text-nexus-muted text-sm text-center py-4">
+                    Data item tidak tersedia
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {detailOrder.order_items.map((item) => (
+                      <div key={item.id} className="flex items-center gap-3">
+                        <img
+                          src={item.products?.image_url || 'https://placehold.co/40x40/111118/00D4FF?text=?'}
+                          alt={item.products?.name || 'Produk'}
+                          className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-nexus-border"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-nexus-text text-sm font-medium truncate">
+                            {item.products?.name || 'Produk tidak tersedia'}
+                          </p>
+                          <p className="text-nexus-muted text-xs">
+                            {item.quantity} × {new Intl.NumberFormat('id-ID', {
+                              style: 'currency',
+                              currency: 'IDR',
+                              minimumFractionDigits: 0,
+                            }).format(item.price_at_purchase)}
+                          </p>
+                        </div>
+                        <p className="text-nexus-cyan text-sm font-semibold flex-shrink-0">
+                          {new Intl.NumberFormat('id-ID', {
+                            style: 'currency',
+                            currency: 'IDR',
+                            minimumFractionDigits: 0,
+                          }).format(item.price_at_purchase * item.quantity)}
                         </p>
                       </div>
-                      <p className="text-nexus-cyan text-sm font-semibold flex-shrink-0">
-                        {formatCurrency(item.price_at_purchase * item.quantity)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Total */}
               <div className="flex justify-between font-bold text-lg border-t border-nexus-border pt-3">

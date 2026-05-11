@@ -65,7 +65,7 @@ export function useAllOrders() {
           profiles (
             id,
             full_name,
-            email:id
+            phone
           ),
           order_items (
             id,
@@ -74,7 +74,8 @@ export function useAllOrders() {
             products (
               id,
               name,
-              image_url
+              image_url,
+              price
             )
           )
         `)
