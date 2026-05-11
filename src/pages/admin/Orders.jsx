@@ -42,8 +42,10 @@ export default function AdminOrders() {
     setUpdatingId(orderId)
     const result = await updateStatus(orderId, newStatus)
     if (result.success) {
-      if (newStatus === 'completed') {
-        toast.success('Pesanan selesai! Stok produk otomatis berkurang.')
+      if (newStatus === 'processing') {
+        toast.success('Pesanan diproses! Stok produk otomatis berkurang.')
+      } else if (newStatus === 'cancelled') {
+        toast.success('Pesanan dibatalkan. Stok produk dikembalikan.')
       } else {
         toast.success(`Status diperbarui: ${STATUS_LABELS[newStatus]}`)
       }
@@ -51,12 +53,7 @@ export default function AdminOrders() {
         setDetailOrder((prev) => ({ ...prev, status: newStatus }))
       }
     } else {
-      // Tangkap error stok tidak cukup dari database
-      if (result.error?.includes('Stok produk tidak mencukupi')) {
-        toast.error('Gagal: Stok produk tidak mencukupi untuk menyelesaikan pesanan ini.')
-      } else {
-        toast.error('Gagal update status: ' + result.error)
-      }
+      toast.error('Gagal update status: ' + result.error)
     }
     setUpdatingId(null)
   }
