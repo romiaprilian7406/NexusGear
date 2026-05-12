@@ -20,11 +20,13 @@ import AdminOrders from '../pages/admin/Orders'
 import AdminUsers from '../pages/admin/Users'
 
 import Navbar from '../components/layout/Navbar'
+import AdminNavbar from '../components/layout/AdminNavbar'
 import Footer from '../components/layout/Footer'
 import CartDrawer from '../components/cart/CartDrawer'
 import ErrorBoundary from '../components/shared/ErrorBoundary'
 
-function Layout({ children, noFooter }) {
+// Layout untuk user biasa — ada Navbar, Footer, CartDrawer
+function PublicLayout({ children, noFooter }) {
   return (
     <div className="min-h-screen bg-nexus-bg flex flex-col">
       <Navbar />
@@ -35,10 +37,11 @@ function Layout({ children, noFooter }) {
   )
 }
 
+// Layout untuk admin — Navbar khusus admin, tanpa Footer & CartDrawer
 function AdminLayout({ children }) {
   return (
     <div className="min-h-screen bg-nexus-bg">
-      <Navbar />
+      <AdminNavbar />
       {children}
     </div>
   )
@@ -50,36 +53,36 @@ export default function AppRouter() {
       <ErrorBoundary>
         <Routes>
           {/* Public routes */}
-          <Route path="/" element={<Layout><Home /></Layout>} />
-          <Route path="/shop" element={<Layout><Shop /></Layout>} />
-          <Route path="/product/:id" element={<Layout><ProductDetail /></Layout>} />
-          <Route path="/cart" element={<Layout><Cart /></Layout>} />
-          <Route path="/login" element={<Layout noFooter><Login /></Layout>} />
-          <Route path="/register" element={<Layout noFooter><Register /></Layout>} />
+          <Route path="/" element={<PublicLayout><Home /></PublicLayout>} />
+          <Route path="/shop" element={<PublicLayout><Shop /></PublicLayout>} />
+          <Route path="/product/:id" element={<PublicLayout><ProductDetail /></PublicLayout>} />
+          <Route path="/cart" element={<PublicLayout><Cart /></PublicLayout>} />
+          <Route path="/login" element={<PublicLayout noFooter><Login /></PublicLayout>} />
+          <Route path="/register" element={<PublicLayout noFooter><Register /></PublicLayout>} />
 
-          {/* Protected routes (auth required) */}
+          {/* Protected routes */}
           <Route path="/checkout" element={
             <ProtectedRoute>
-              <Layout noFooter><Checkout /></Layout>
+              <PublicLayout noFooter><Checkout /></PublicLayout>
             </ProtectedRoute>
           } />
           <Route path="/receipt/:orderId" element={
             <ProtectedRoute>
-              <Layout><Receipt /></Layout>
+              <PublicLayout><Receipt /></PublicLayout>
             </ProtectedRoute>
           } />
           <Route path="/profile" element={
             <ProtectedRoute>
-              <Layout><Profile /></Layout>
+              <PublicLayout><Profile /></PublicLayout>
             </ProtectedRoute>
           } />
           <Route path="/orders" element={
             <ProtectedRoute>
-              <Layout><OrderHistory /></Layout>
+              <PublicLayout><OrderHistory /></PublicLayout>
             </ProtectedRoute>
           } />
 
-          {/* Admin routes */}
+          {/* Admin routes — pakai AdminLayout */}
           <Route path="/admin/dashboard" element={
             <AdminRoute><AdminLayout><AdminDashboard /></AdminLayout></AdminRoute>
           } />
@@ -93,8 +96,8 @@ export default function AppRouter() {
             <AdminRoute><AdminLayout><AdminUsers /></AdminLayout></AdminRoute>
           } />
 
-          {/* 404 Catch-all */}
-          <Route path="*" element={<Layout noFooter><NotFound /></Layout>} />
+          {/* 404 */}
+          <Route path="*" element={<PublicLayout noFooter><NotFound /></PublicLayout>} />
         </Routes>
       </ErrorBoundary>
     </BrowserRouter>
